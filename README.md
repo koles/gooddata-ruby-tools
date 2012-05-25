@@ -1,6 +1,9 @@
 ## Prerequisity
 
-`gem install gooddata`
+ * `gem install gooddata`
+    * to install the GoodData Ruby gem
+ * `goodata auth:store` 
+    * to save your GoodData credentials in the ~/.gooddata file (caution: the credentials are stored without any encryption)
 
 ## Usage
 
