@@ -40,8 +40,9 @@ class DataPermissions
     user_url = find_user user_email
     lbl_obj  = GoodData::MdObject[label]
     attr_url = lbl_obj['content']['formOf']
-    value_url = value2uri lbl_obj, value
-    filter_resp = create_filter "#{label} = #{value}", attr_url, value_url
+    values = value.is_a?(Array) ? value : [ value ]
+    value_urls = values.map { |v| value2uri(lbl_obj, v) }
+    filter_resp = create_filter "#{label} = #{value}", attr_url, value_urls
     result = set_user_filter user_url, filter_resp['uri']
     pp result
   end
@@ -53,11 +54,12 @@ class DataPermissions
   # @param title human readable object name
   # @param object_url the 'key' part of the filtering expression
   # @param value_url the 'value' part of the filtering expression
-  def create_filter(title, object_url, value_url)
+  def create_filter(title, object_url, value_urls)
+    in_expr = value_urls.map { |u| "[#{u}]" }.join(',')
     filter = {
       "userFilter" => {
         "content" => {
-          "expression" => "[#{object_url}]=[#{value_url}]"
+          "expression" => "[#{object_url}] IN (#{in_expr})"
         },
         "meta" => {
           "category" => "userFilter",
@@ -65,6 +67,7 @@ class DataPermissions
         }
       }
     }
+    puts filter
     GoodData.post "/gdc/md/#{@project_id}/obj", filter
   end
 
@@ -104,7 +107,12 @@ class DataPermissions
     elements_url  = label['links']['elements']
     uri  = "#{elements_url}?filter=#{URI::encode value}"
     resp = GoodData.get uri
-    resp['attributeElements']['elements'][0]['uri']
+    elements = resp['attributeElements']['elements']
+    if elements && !elements.empty?
+      matching = resp['attributeElements']['elements'].find { |e| e['title'] == value }
+      return matching['uri'] if matching
+    end
+    raise "Value '#{value}' not found for label '#{label}'"
   end
 end
 
@@ -132,7 +140,11 @@ end
 project_id = ARGV.shift
 user_email = ARGV.shift
 label_idtf = ARGV.shift
-value      = ARGV.shift or begin ; usage($stderr); exit 1; end
+values      = ARGV
+
+unless values && !values.empty? then
+  usage($stderr); exit 1
+end
 
 dp = DataPermissions.new project_id
-dp.add user_email, label_idtf, value
+dp.add user_email, label_idtf, values
