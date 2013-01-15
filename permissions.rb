@@ -147,4 +147,4 @@ unless values && !values.empty? then
 end
 
 dp = DataPermissions.new project_id
-dp.add user_email, label_idtf, values
+dp.add user_email.downcase, label_idtf, values
