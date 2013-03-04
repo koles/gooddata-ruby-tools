@@ -5,45 +5,65 @@
 require 'rubygems'
 require 'gooddata'
 require 'gooddata/command'
+require 'pp'
 
 project_id = ARGV.shift || raise("Usage: #{$0} project_id\n\nCall gooddata auth:store first.")
 GoodData::Command.connect
 GoodData.use 'emfcovv1rv0bsj13272dryzgptin2sd6'
 
+NO_DATASET = 'NO DATASET'
+
 unused_datasets = {}
 unused_dates = {}
 [ 'attributes', 'facts'].each do |col_type|
-  puts "col_type = #{col_type}"
   list = GoodData.get(GoodData.project.md['query'] + "/#{col_type}")['query']['entries']
   list.each do |item|
-    puts "\t#{item['link']}\t#{item['title']}"
     obj_id = item['link'].sub /^.*\//, ''
     used_by = GoodData.get("/gdc/md/#{project_id}/usedby/#{obj_id}")['usedby']['nodes']
-    ms_and_rs = used_by.find_all { |n| [ 'report', 'metric'].include? n['category'] }
-    puts "\t... found #{ms_and_rs.length} metrics or reports"
+    dependants = used_by.find_all { |n| [ 'report', 'metric', 'projectDashboard' ].include? n['category'] }
     ds = used_by.find { |n| n['category'] == 'dataSet' }
-    if ds['title'] =~ /^Date \(.*\)/  # we want to list whole date dimensions
+    unless ds
+      warn "#{item['link']} ('#{item['title']}') is not a part of any dataset"
+      ds = { 'title' => NO_DATASET }   # let's make up a fake placeholder
+    end
+    if ds['title'] =~ /^Date \(.*\)/   # we want to list whole date dimensions
                                        # ... but individual columns of other data sets
-      output = (unused_dates[ds['title']] ||= { :used => 0, :unused => 0 })
-      output[ms_and_rs.empty? ? :unused : :used] += 1
+      output = (unused_dates[ds['title']] ||= { :used => 0, :unused => 0, :link => ds['link'] })
+      output[dependants.empty? ? :unused : :used] += 1
     else
-      if ms_and_rs.empty?
-        ((unused_datasets[ds['title']] ||= {})[col_type] ||= []) << item
+      if dependants.empty?
+        ((unused_datasets[ds['title']] ||= { :link => ds['link'] })[col_type] ||= []) << item
       end
     end
   end
 end
+
+uris = []
+unused_datasets.each do |ds, cols|
+  uris << cols[:link]
+  [ 'attributes', 'facts' ].each do |col_type|
+    uris.concat cols[col_type].map { |c| c['link'] } if cols[col_type]
+  end
+end
+unused_dates.each { |title,info| uris << info[:link] }
+
+idtf_resp = GoodData.post GoodData.project.md['instance-identifiers'], { "uriToIdentifier" => uris }
+identifiers = {}
+idtf_resp['identifiers'].each { |i| identifiers[ i['uri'] ] = i['identifier'] }
 
 unless unused_datasets.keys.empty?
   puts "UNUSED REGULAR COLUMNS"
   puts "======================"
 end
 
-unused_datasets.each do |ds, by_type|
-  puts ds
-  by_type.each do |col_type, items|
-    puts "\t#{col_type}"
-    items.each { |i| puts "\t\t#{i['link']}\t#{i['title']}" }
+unused_datasets.each do |ds, info|
+  puts "#{ds}\t#{info[:link]}\t#{identifiers[info[:link]]}"
+  [ 'attributes', 'facts' ].each do |col_type|
+    items = info[col_type]
+    if items
+      puts "\t#{col_type}"
+      items.each { |i| puts "\t\t#{i['link']}\t#{i['title']}\t#{identifiers[i['link']]}" }
+    end
   end
   puts
 end
@@ -54,5 +74,5 @@ unless unused_dates.keys.empty?
 end
 
 unused_dates.each do |ds, info|
-  puts "#{ds}\n" if info[:used] == 0
+  puts "\t\t#{info[:link]}\t#{ds}\t#{identifiers[info[:link]]}\n" if info[:used] == 0
 end
