@@ -7,14 +7,19 @@
 
 ## Usage
 
-`./permissions.rb project_id email label_idtf value`
+`./assign_filter.rb project_id email label_idtf value`
+
+`./invite_with_filter.rb project_id email label_idtf value`
 
 *Example:*
 
 `./permissions.rb d01480a4d1807af40a5d45cf57347041 joe@example.com label.department.id Accounting`
 
+`./invite_with_filter.rb d01480a4d1807af40a5d45cf57347041 joe@example.com /gdc/projects/d01480a4d1807af40a5d45cf57347041/roles/5 label.department.id Accounting`
+
  * project_id - project ID, e.g. d01480a4d1807af40a5d45cf57347041
  * email      - specifies the user whose permissions are restricted
+ * role       - a URI of the role of the invited user
  * label_idtf - the identifier of the label used in the data access
                 filtering expression.
                 If the corresponding column in the XML data set

@@ -1,5 +1,3 @@
-#!/usr/bin/env ruby
-
 require 'rubygems'
 
 require 'uri'
@@ -35,16 +33,47 @@ class DataPermissions
   #
   # @param user_email whose permissions are configured
   # @param label identifier of the filtered column
-  # @param value filtered value
+  # @param value filtered value(s)
   def add(user_email, label, value)
     user_url = find_user user_email
+    filter_url = prepare label, value
+    result = set_user_filter user_url, filter_url
+    pp result
+  end
+
+  # Sends an invitation associated with a mandatory user filter
+  # @param email user to be invited
+  # @param label identifier of the filtered column
+  # @param value filtered value(s)
+  def invite(email, role, label, value)
+    filter_url = prepare label, value
+    invitation = {
+      "invitations" => [ {
+        "invitation" => {
+          "content" => {
+            "email" => email,
+            "userFilters" => [ filter_url ],
+            "role" => role
+          }
+        }
+      } ]
+    }
+    pp invitation
+    GoodData.post "/gdc/projects/#{@project_id}/invitations", invitation
+  end
+
+  # Prepares the mandatory user filter object for an assignment to a user
+  # or an invitation. Returns the URI of a created user filter object.
+  #
+  # @param label identifier of the filtered column
+  # @param value filtered value(s)
+  def prepare(label, value)
     lbl_obj  = GoodData::MdObject[label]
     attr_url = lbl_obj['content']['formOf']
     values = value.is_a?(Array) ? value : [ value ]
     value_urls = values.map { |v| value2uri(lbl_obj, v) }
     filter_resp = create_filter "#{label} = #{value}", attr_url, value_urls
-    result = set_user_filter user_url, filter_resp['uri']
-    pp result
+    return filter_resp['uri']
   end
 
   private
@@ -67,7 +96,6 @@ class DataPermissions
         }
       }
     }
-    puts filter
     GoodData.post "/gdc/md/#{@project_id}/obj", filter
   end
 
@@ -115,36 +143,3 @@ class DataPermissions
     raise "Value '#{value}' not found for label '#{label}'"
   end
 end
-
-def usage(out = $stdout)
-  out.puts "Usage: #{$0} project_id email label_idtf value"
-  out.puts
-  out.puts " * project_id - project ID, e.g. d01480a4d1807af40a5d45cf57347041"
-  out.puts " * email      - specifies the user whose permissions are restricted"
-  out.puts " * label_idtf - the identifier of the label used in the data access"
-  out.puts "                filtering expression."
-  out.puts "                If the corresponding column in the XML data set"
-  out.puts "                descriptor has ldmType 'ATTRIBUTE' and name 'xyz' and"
-  out.puts "                the schema name is 'dataset', use 'label.dataset.xyz'."
-  out.puts "                If the column is a label named 'xyz' pointing to the"
-  out.puts "                attribute 'abc', use 'label.dataset.abc.xyz' instead."
-  out.puts " * value      - the value of label_idtf that can identify rows"
-  out.puts "                accessible by the user"
-  out.puts
-  out.puts "To avoid being asked for credentials, run 'gooddata auth:store' first"
-  out.puts "to make your GoodData credentials available to the Ruby gem via the"
-  out.puts ".gooddata file in your home directory."
-  out.puts
-end
-
-project_id = ARGV.shift
-user_email = ARGV.shift
-label_idtf = ARGV.shift
-values      = ARGV
-
-unless values && !values.empty? then
-  usage($stderr); exit 1
-end
-
-dp = DataPermissions.new project_id
-dp.add user_email.downcase, label_idtf, values
