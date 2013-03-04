@@ -11,11 +11,15 @@
 
 `./invite_with_filter.rb project_id email label_idtf value`
 
+`./find_unused_columns.rb project_id`
+
 *Example:*
 
 `./permissions.rb d01480a4d1807af40a5d45cf57347041 joe@example.com label.department.id Accounting`
 
 `./invite_with_filter.rb d01480a4d1807af40a5d45cf57347041 joe@example.com /gdc/projects/d01480a4d1807af40a5d45cf57347041/roles/5 label.department.id Accounting`
+
+`./find_unused_columns.rb d01480a4d1807af40a5d45cf57347041`
 
  * project_id - project ID, e.g. d01480a4d1807af40a5d45cf57347041
  * email      - specifies the user whose permissions are restricted
