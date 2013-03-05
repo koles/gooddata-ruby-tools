@@ -9,7 +9,7 @@ require 'pp'
 
 project_id = ARGV.shift || raise("Usage: #{$0} project_id\n\nCall gooddata auth:store first.")
 GoodData::Command.connect
-GoodData.use 'emfcovv1rv0bsj13272dryzgptin2sd6'
+GoodData.use project_id
 
 NO_DATASET = 'NO DATASET'
 
