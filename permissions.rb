@@ -2,6 +2,7 @@ require 'rubygems'
 
 require 'uri'
 require 'pp'
+require 'json'
 
 require 'gooddata'
 require 'gooddata/command'
@@ -34,10 +35,10 @@ class DataPermissions
   # @param user_email whose permissions are configured
   # @param label identifier of the filtered column
   # @param value filtered value(s)
-  def add(user_email, label, value)
+  def add(user_email, label_or_expression, value = nil)
     user_url = find_user user_email
-    filter_url = prepare label, value
-    result = set_user_filter user_url, filter_url
+    muf = prepare label_or_expression, value
+    result = set_user_filter user_url, muf[:url]
     pp result
   end
 
@@ -45,14 +46,15 @@ class DataPermissions
   # @param email user to be invited
   # @param label identifier of the filtered column
   # @param value filtered value(s)
-  def invite(email, role, label, value)
-    filter_url = prepare label, value
+  def invite(email, role, label_or_expression, value)
+    muf = prepare label_or_expression, value
+
     invitation = {
       "invitations" => [ {
         "invitation" => {
           "content" => {
             "email" => email,
-            "userFilters" => [ filter_url ],
+            "userFilters" => [ muf[:url] ],
             "role" => role
           }
         }
@@ -62,18 +64,49 @@ class DataPermissions
     GoodData.post "/gdc/projects/#{@project_id}/invitations", invitation
   end
 
-  # Prepares the mandatory user filter object for an assignment to a user
-  # or an invitation. Returns the URI of a created user filter object.
-  #
-  # @param label identifier of the filtered column
-  # @param value filtered value(s)
-  def prepare(label, value)
-    lbl_obj  = GoodData::MdObject[label]
+  def prepare(label_or_expression, value = nil)
+    if value && (!value.is_a?(Array) || !value.empty?) then
+      expression = build_simple_expression(label_or_expression, value)
+      mufname    = "#{label_or_expression} = #{value}"
+    else
+      expression = parse_expression(label_or_expression)
+      mufname    = label_or_expression
+    end
+    filter_resp = create_filter mufname, expression
+    filter_url = filter_resp['uri']
+    return { :url => filter_url, :name => mufname }
+  end
+
+  def build_simple_expression(label, value)
+    lbl_obj  = GoodData::MdObject[label] or raise "No object found for identifier '#{label}'"
     attr_url = lbl_obj['content']['formOf']
     values = value.is_a?(Array) ? value : [ value ]
     value_urls = values.map { |v| value2uri(lbl_obj, v) }
-    filter_resp = create_filter "#{label} = #{value}", attr_url, value_urls
-    return filter_resp['uri']
+    in_expr = value_urls.map { |u| "[#{u}]" }.join(',')
+    "[#{attr_url}] IN (#{in_expr})"
+  end
+
+  def parse_expression(src)
+    last_label = nil
+    src.gsub( /`[^`]+`|"[^"]+"/ ).each do |i|
+      if (match = i.match(/^`([^`]+)`$/)) then
+        idtf = match.captures[0] or raise "No identifier found in #{i}"
+        obj =  GoodData::MdObject[idtf] or raise "No object with identifier #{idtf} found"
+        if obj['meta']['category'] == 'attributeDisplayForm'
+          last_label = obj # future values use this label
+          '[' + obj['content']['formOf'] + ']'
+        elsif obj['meta']['category'] == 'attribute'
+          last_label = nil # future values need a new label
+          '[' + obj['meta']['uri'] + ']'
+        else
+          raise "Unexpected object category #{obj['meta']['category']} for identifier '#{idtf}'"
+        end
+      elsif (match = i.match(/^"([^"]+)"$/)) then
+        value = match.captures[0] or raise "No value found in #{i}"
+        raise "Unknown label for value '#{value}'" unless last_label
+        '[' + value2uri(last_label, value) + ']'
+      end
+    end
   end
 
   private
@@ -81,14 +114,13 @@ class DataPermissions
   # Create a GoodData object holding the "key = value" filtering expression
   #
   # @param title human readable object name
-  # @param object_url the 'key' part of the filtering expression
-  # @param value_url the 'value' part of the filtering expression
-  def create_filter(title, object_url, value_urls)
-    in_expr = value_urls.map { |u| "[#{u}]" }.join(',')
+  # @param expression MUF expression using URIs rather than human readable
+  #         identifiers
+  def create_filter(title, expression)
     filter = {
       "userFilter" => {
         "content" => {
-          "expression" => "[#{object_url}] IN (#{in_expr})"
+          "expression" => expression
         },
         "meta" => {
           "category" => "userFilter",
@@ -96,6 +128,7 @@ class DataPermissions
         }
       }
     }
+    puts filter.to_json
     GoodData.post "/gdc/md/#{@project_id}/obj", filter
   end
 
@@ -125,7 +158,9 @@ class DataPermissions
     resp = GoodData.get url
     resp['users'].each do |u|
       user = u['user']
-      return user['links']['self'] if user['content']['email'] == email
+      if user['content']['email'] == email
+        return user['links']['self']
+      end
     end
     raise ArgumentError.new "User '#{email}' is not a member of project '#{@project_id}'"
   end

@@ -5,7 +5,7 @@ require 'rubygems'
 require 'uri'
 require 'pp'
 
-require 'permissions'
+require File.expand_path(File.dirname(__FILE__) + '/permissions')
 
 def usage(out = $stdout)
   out.puts "Usage: #{$0} project_id email role label_idtf value"
@@ -35,7 +35,7 @@ role = ARGV.shift
 label_idtf = ARGV.shift
 values      = ARGV
 
-unless values && !values.empty? then
+unless label_idtf then
   usage($stderr); exit 1
 end
 
