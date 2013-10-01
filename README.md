@@ -9,7 +9,11 @@
 
 `./assign_filter.rb project_id email label_idtf value`
 
-`./invite_with_filter.rb project_id email label_idtf value`
+`./invite_with_filter.rb project_id email role_uri label_idtf value`
+
+`./assign_filter.rb project_id email filter_expression`
+
+`./invite_with_filter.rb project_id email role_uri filter_expression`
 
 `./find_unused_columns.rb project_id`
 
@@ -18,6 +22,11 @@
 `./permissions.rb d01480a4d1807af40a5d45cf57347041 joe@example.com label.department.id Accounting`
 
 `./invite_with_filter.rb d01480a4d1807af40a5d45cf57347041 joe@example.com /gdc/projects/d01480a4d1807af40a5d45cf57347041/roles/5 label.department.id Accounting`
+
+``./assign_filter.rb project_id email '(`label.manager.name`="00550000002Fb3yAAC") OVER `attr.reports_to.factsof` TO `attr.productsplitgroup.productsplitgroup`' ``
+
+``./invite_with_filter.rb project_id email role_uri '(`label.manager.name`="00550000002Fb3yAAC") OVER `attr.reports_to.factsof` TO `attr.productsplitgroup.productsplitgroup`' ``
+
 
 `./find_unused_columns.rb d01480a4d1807af40a5d45cf57347041`
 
@@ -33,4 +42,8 @@
                 attribute 'abc', use 'label.dataset.abc.xyz' instead.
  * value      - the value of label_idtf that can identify rows
                 accessible by the user
+ * filter_expression - strings in backsticks identify attributes (can be 
+                label or an attribute identifier), string in 
+                double quotes are translated to attribute values
+                assuming the last used label.
 
