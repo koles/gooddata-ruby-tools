@@ -79,7 +79,7 @@ class DataPermissions
 
   def build_simple_expression(label, value)
     lbl_obj  = GoodData::MdObject[label] or raise "No object found for identifier '#{label}'"
-    attr_url = lbl_obj['content']['formOf']
+    attr_url = lbl_obj['content']['formOf'] rescue raise("Object '#{label} is not a label'")
     values = value.is_a?(Array) ? value : [ value ]
     value_urls = values.map { |v| value2uri(lbl_obj, v) }
     in_expr = value_urls.map { |u| "[#{u}]" }.join(',')
